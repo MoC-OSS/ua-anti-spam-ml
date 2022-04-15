@@ -1,6 +1,8 @@
 import os
 import json
 from datetime import datetime
+import io
+import csv
 
 from werkzeug.utils import secure_filename
 from flask import (
@@ -14,7 +16,9 @@ from flask import (
 )
 from flask_sqlalchemy import SQLAlchemy
 from .ml.predictor import Predictor
+from .ml.trainer import Trainer
 
+import pandas as pd
 
 app = Flask(__name__)
 app.config.from_object("project.config.Config")
@@ -51,8 +55,9 @@ def upload_file():
     <!doctype html>
     <title>upload new File</title>
     <form action="" method=post enctype=multipart/form-data>
-      <p><input type=file name=file><input type=submit value=Upload>
+      <p><input type=file name=file><input type=submit value="Upload CSV">
     </form>
+    <small>(csv file with two columns: <b>commenttext</b> and <b>spam</b>)</small>
     """
 
 @app.route("/web/spam-predict", methods=['GET', 'POST'])
@@ -86,9 +91,9 @@ def api_predict():
     """
     Waiting for:
     BODY
-    { message: 'тест', rate: 0.8 }
+    { "message": "Я спав а він стріляв", "rate": 0.8 }
     Rerurn json like:
-    { time: 200, result: { spamRate: 0.988888, deleteRank: 0.8, isSpam: true, tensorToken: [0,1, 345,2,2,2] } }
+    { "result": { "deleteRank": 0.8, "isSpam": false, "spamRate": 0.251405040105228, "tensorToken": "я спат а стріл" }, "time": 4.634 }
     """
     time_start_req = datetime.now()
     test_message = []
@@ -118,28 +123,77 @@ def api_predict():
 
     return jsonify(res_dict)
 
-@app.route("/api/set_model", methods=['POST'])
+@app.route("/api/set-model", methods=['POST'])
 def api_set_model():
     """
     Waiting for:
     BODY
-    { "model_name": "add-cv-model.pkl", "nb_model": false }
+    { "cv_model_name": "add-cv-model.pkl", "nb_model_name": "add-nb-model.pkl" }
     Rerurn json like:
     { "status": 'OK', "model_type": 'nb' }
     """
     request_data = request.get_json()
-    model_name = request_data['model_name']
+    cv_model_name = request_data['cv_model_name']
+    nb_model_name = request_data['nb_model_name']
 
-    if model_name in os.listdir(app.config["ML_MODELS_FOLDER"]):
-        if request_data['nb_model']: # check type of model
-            # set nativeBayes model
-            predictor.load_nb_model(nbm_name=model_name)
-            app.logger.info('New ML NativeBayes model was set ("%s") ', model_name)
-            return jsonify({"status": 'OK', "model_type": 'nb'})
-        else:
-            # set countVectorize model
-            predictor.load_cv_model(cvm_name=model_name)
-            app.logger.info('New ML CountVectorize model was set ("%s") ', model_name)
-            return jsonify({"status": 'OK', "model_type": 'cv'})
+    if cv_model_name and nb_model_name in os.listdir(app.config["ML_MODELS_FOLDER"]):
+        # set nativeBayes model
+        predictor.load_nb_model(nbm_name=nb_model_name)
+        app.logger.info('New ML NativeBayes model was set ("%s") ', nb_model_name)
+
+        # set countVectorize model
+        predictor.load_cv_model(cvm_name=cv_model_name)
+        app.logger.info('New ML CountVectorize model was set ("%s") ', cv_model_name)
+            
+        return jsonify({"status": 'OK', "cv_model_name": cv_model_name, "nb_model_name": nb_model_name})
     else:
-        return jsonify({"status": 'Model {} not found'.format(model_name)})
+        return jsonify({"status": 'bad', "info": 'Model name not found'})
+
+@app.route("/api/train-data-upload", methods=['POST'])
+def api_train_data_upload():
+    """
+    (csv file with two columns: commenttext and spam)
+    Waiting for:
+    BODY binary file
+    """
+    upload_data = request.data.decode("utf-8")
+    if upload_data != '':
+        # issue with other types of reqest data (raw json, etc.)
+        train_csv_name = 'upload-train-data.csv'
+        f = open(os.path.join(app.config["MEDIA_FOLDER"], train_csv_name), "w", encoding="utf-8")
+        f.write(upload_data)
+        f.close()
+
+        return jsonify({"status": 'OK', "info": 'The new file for train ML model was uploaded'})
+    else:
+        return jsonify({"status": 'bad', "info": 'Send csv file as binary data'})
+
+@app.route("/api/train-models", methods=['POST'])
+def api_train_models():
+    """
+    nativeBayes and countVectorize model will be trained
+    Waiting for:
+    BODY
+    { "save_model_name": "new-model.pkl" }
+    Rerurn json like:
+    { "status": 'OK', "nb_model_name": 'nb-new-model.pkl', "cv_model_name": 'cv-new-model.pkl' }
+    """
+    trainer = Trainer()
+    trainer.train_file_name = 'upload-train-data.csv'
+
+    time_start_req = datetime.now()
+
+    request_data = request.get_json()
+    save_model_name = request_data['save_model_name']
+
+    trainer.prepeare_data(steammer=True, lemmatizer=True)
+    trainer.make_models(model_name=save_model_name)
+
+    app.logger.info('New ML Models was trained ("nb-%s", "cv-%s") ', save_model_name, save_model_name)
+    req_sec = ((datetime.now() - time_start_req).total_seconds())*1000 # in milliseconds
+    return jsonify({"status": 'OK', 
+                    "info": 'The new Models was trained (nb-{}, cv-{})'.format(save_model_name, save_model_name),
+                    "time": req_sec,
+                    "accuracy": trainer.inf_accuracy,
+                    "df_spam_val_count": "spam-{}, notSpam-{}".format(trainer.inf_spam_val_count[1], trainer.inf_spam_val_count[0])
+                })

@@ -1,9 +1,9 @@
 <h1 align="center">Flask with ML spam prediction</h1>
 
 
-This is a Flask App with ML **Naive Bayes** model for check message on the Spam statement, Ukrainian words oriented. 
+This is a Flask App with ML **Naive Bayes** model for check message on the Spam statement, **Ukrainian** words oriented. 
 
-Also we train and use here **Count Vectorizer**(so 2 different models  will be used for prediction).
+Also we train and use here **Count Vectorizer**(so **2 different models  will be used for prediction**).
 
 # Installation
 
@@ -23,7 +23,9 @@ For *Flask* config uses `services/web/project/config.py`.
 - **/upload** (upload file to *media* folder)
 - **/web/spam-predict** (simple UI form for checking Spam)
 - **/api/spam-predict** (api request for checking Spam)
-- **/api/set_model** (api request for setting other ml models)
+- **/api/set-model** (api request for setting other ml models, for each models separately)
+- **/api/train-data-upload** (api request for upload new train file for ML)
+- **/api/train-models** (train new Naive Bayes and Count Vectorizer models)
 
 # Usage Example
 
