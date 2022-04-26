@@ -11,17 +11,21 @@ from flask import (
     send_from_directory,
     request,
     jsonify,
+    abort,
     redirect,
     url_for
 )
 from flask_sqlalchemy import SQLAlchemy
 from .ml.predictor import Predictor
 from .ml.trainer import Trainer
+from .ml.src.translit_convertor import ru_translit as translit
+from .ml.src.translit_convertor import special_characters as spec_ch
 
 import pandas as pd
 
 app = Flask(__name__)
 app.config.from_object("project.config.Config")
+
 db = SQLAlchemy(app)
 
 predictor = Predictor()
@@ -37,9 +41,10 @@ class User(db.Model):
         self.email = email
 
 
-# @app.route("/")
-# def hello_world():
-#     return jsonify(hello="world")
+@app.route('/healthy')
+def healthy():
+    db.engine.execute('SELECT 1')
+    return ''
 
 @app.route("/static/<path:filename>")
 def staticfiles(filename):
@@ -123,7 +128,7 @@ def api_predict():
 
     return jsonify(res_dict)
 
-@app.route("/api/set-model", methods=['POST'])
+@app.route("/api/set-models", methods=['POST'])
 def api_set_model():
     """
     Waiting for:
@@ -147,7 +152,7 @@ def api_set_model():
             
         return jsonify({"status": 'OK', "cv_model_name": cv_model_name, "nb_model_name": nb_model_name})
     else:
-        return jsonify({"status": 'bad', "info": 'Model name not found'})
+        return abort(400, "Model name not found")
 
 @app.route("/api/train-data-upload", methods=['POST'])
 def api_train_data_upload():
@@ -157,16 +162,16 @@ def api_train_data_upload():
     BODY binary file
     """
     upload_data = request.data.decode("utf-8")
-    if upload_data != '':
-        # issue with other types of reqest data (raw json, etc.)
+
+    if request.content_type not in ['text/csv',]:
+        return abort(400, "Unexpected Content-Type, expecting: text/csv")
+    else:
         train_csv_name = 'upload-train-data.csv'
         f = open(os.path.join(app.config["MEDIA_FOLDER"], train_csv_name), "w", encoding="utf-8")
         f.write(upload_data)
         f.close()
 
         return jsonify({"status": 'OK', "info": 'The new file for train ML model was uploaded'})
-    else:
-        return jsonify({"status": 'bad', "info": 'Send csv file as binary data'})
 
 @app.route("/api/train-models", methods=['POST'])
 def api_train_models():
@@ -178,6 +183,8 @@ def api_train_models():
     Rerurn json like:
     { "status": 'OK', "nb_model_name": 'nb-new-model.pkl', "cv_model_name": 'cv-new-model.pkl' }
     """
+    app.logger.info('Start train new ML models')
+
     trainer = Trainer()
     trainer.train_file_name = 'upload-train-data.csv'
 
@@ -197,3 +204,54 @@ def api_train_models():
                     "accuracy": trainer.inf_accuracy,
                     "df_spam_val_count": "spam-{}, notSpam-{}".format(trainer.inf_spam_val_count[1], trainer.inf_spam_val_count[0])
                 })
+
+@app.route("/api/translit-convertor", methods=['POST'])
+def api_translit_convertor():
+    """
+    Waiting for:
+    BODY
+    { "string": "Ці хлопці перші беруть на себе удар", "type": "ru" }
+        or, for revers
+    { "string": "Tsі hloptsі pershі berut' na sebe udar", "type": "cyr" }
+    Rerurn json like:
+    { "res": "Ці хлопці перші берутЬ на себе удар", "status": "OK", "type": "to_cyr" }
+    """
+    request_data = request.get_json()
+    translit_type = request_data['type']
+    text = request_data['string']
+
+    res = None
+    if translit_type == 'ru':
+        res = translit.ru_to_cyrillic(text)
+    elif translit_type == 'cyr':
+        res = translit.cyrillic_to_ru(text)
+    else:
+        return abort(400, "Unexpected type {}, available: [ru, cyr]".format(translit_type))
+
+    return jsonify({
+            "status": 'OK', 
+            "res": res,
+            "type": translit_type,
+        })
+
+@app.route("/api/spec-symb", methods=['POST'])
+def api_spec_symb():
+    """
+    Waiting for:
+    BODY
+    { "string": "Взрывается как мини яде₽ка. No πrivet"}
+    Rerurn json like:
+    { "res": "Взрывается как мини ядерка. Но привет", "status": "OK" }
+    """
+    request_data = request.get_json()
+    text = request_data['string']
+
+    # replacing special symbols (like ₽, @, 0, € etc..)
+    res = spec_ch.replace_specsymb(text)
+    # additional checking for eng symbols
+    res = translit.cyrillic_to_ru(res)
+
+    return jsonify({
+            "status": 'OK', 
+            "res": res,
+        })
