@@ -5,6 +5,14 @@ This is a Flask App with ML **Naive Bayes** model for check message on the Spam 
 
 Also we train and use here **Count Vectorizer**(so **2 different models  will be used for prediction**).
 
+All functions for prepearing text in **ml.preprocess_text.py**:
+1. Text Preprocessing (removing emails, mentions, urls)
+2. Replace symbols (like like ₽, @, 0, €) to letters
+3. Tokenizer
+4. StopWords
+5. Lemmatizer
+6. Stemmer
+
 # Installation
 
 For project startup uses `docker-compose.yml`. In case with prod you can use `docker-compose.prod.yml`.
@@ -19,13 +27,16 @@ For *Flask* config uses `services/web/project/config.py`.
 
 # App routes
 
+- **/healthy** (check app)
 - **/static/<path:filename>** (get static file)
 - **/upload** (upload file to *media* folder)
 - **/web/spam-predict** (simple UI form for checking Spam)
 - **/api/spam-predict** (api request for checking Spam)
-- **/api/set-model** (api request for setting other ml models, for each models separately)
+- **/api/set-models** (api request for setting Naive Bayes and Count Vectorizer ml models)
 - **/api/train-data-upload** (api request for upload new train file for ML)
 - **/api/train-models** (train new Naive Bayes and Count Vectorizer models)
+- **/api/translit-convertor** (cyrillic to rs convertor)
+- **/api/spec-symb** (replacing special characters with letters)
 
 # Usage Example
 
