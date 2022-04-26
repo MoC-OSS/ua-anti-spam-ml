@@ -3,7 +3,7 @@ import os
 
 class StopWords():
     stopwords_corpus_path = os.path.dirname(os.path.abspath(__file__)) + \
-                            '/ua_dict/stopwords_list_v2.txt'
+                            '/ua_dict/stopwords_list_v3.txt'
     stopwords_list = None
 
     def __init__(self,):

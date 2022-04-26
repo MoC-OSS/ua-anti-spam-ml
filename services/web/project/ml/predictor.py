@@ -41,7 +41,7 @@ class Predictor:
         self.pred_prob = self.nb_model.predict_proba(self.text_dtm)[:, 1]
 
     def get_html_result(self,):
-        """return template for Flask with model predictionresult"""
+        """return template for Flask with model prediction result"""
 
         df = pd.DataFrame()
         df['text_tokens'] = self.text_series

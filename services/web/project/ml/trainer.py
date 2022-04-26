@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 from .preprocess_text import preproc_text
 
 import pickle
@@ -31,16 +32,19 @@ class Trainer:
         self.df = pd.read_csv(self.file_path + self.train_file_name)
 
     def prepeare_data(self, steammer=True, lemmatizer=True):
-        # clean df
+        self.df['preproc_txt'] = self.df.commenttext.apply(lambda x: preproc_text(x, steamm=steammer, lemm=lemmatizer))
+        # convert label to a numerical variable
+        self.df['spam_num'] = self.df["spam"].astype(int)
+
+        self.df = self.df[['preproc_txt', 'spam_num']]
+        self.df['preproc_txt'].replace('', np.nan, inplace=True)
         self.df.drop_duplicates(inplace=True)
         self.df.dropna(inplace=True)
 
         # get some info about df
-        self.inf_spam_val_count = self.df['spam'].value_counts()
+        self.inf_spam_val_count = self.df['spam_num'].value_counts()
 
-        self.df['preproc_txt'] = self.df.commenttext.apply(lambda x: preproc_text(x, steamm=steammer, lemm=lemmatizer))
-        # convert label to a numerical variable
-        self.df['spam_num'] = self.df["spam"].astype(int)
+        self.df.to_csv(self.file_path+'preproc_data_res.csv')
 
         # define X and y (from the SMS data) for use with COUNTVECTORIZER
         X =  self.df.preproc_txt
