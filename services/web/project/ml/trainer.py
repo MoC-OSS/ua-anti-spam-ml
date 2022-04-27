@@ -15,7 +15,6 @@ class Trainer:
     The main class for train ML model
     """
     # (csv file with two columns: commenttext and spam)
-    train_file_name = 'upload-train-data.csv'
     file_path = os.path.abspath(os.getcwd())+'/project/media/'
 
     df = None
@@ -28,8 +27,8 @@ class Trainer:
     y_train = None
     y_test = None
 
-    def __init__(self,):
-        self.df = pd.read_csv(self.file_path + self.train_file_name)
+    def __init__(self, train_data_file_name):
+        self.df = pd.read_csv(self.file_path + train_data_file_name)
 
     def prepeare_data(self, steammer=True, lemmatizer=True):
         self.df['preproc_txt'] = self.df.commenttext.apply(lambda x: preproc_text(x, steamm=steammer, lemm=lemmatizer))
