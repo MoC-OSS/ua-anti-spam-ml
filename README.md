@@ -37,6 +37,7 @@ For *Flask* config uses `services/web/project/config.py`.
 - **/api/train-models** (train new Naive Bayes and Count Vectorizer models)
 - **/api/translit-convertor** (cyrillic to rs convertor)
 - **/api/spec-symb** (replacing special characters with letters)
+- **/api/test-compare-models** (for testing/compare old and new models)
 
 # Usage Example
 
