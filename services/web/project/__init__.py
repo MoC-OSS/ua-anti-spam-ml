@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 import io
 import csv
+from pyexpat import model
 
 from werkzeug.utils import secure_filename
 from flask import (
@@ -20,6 +21,8 @@ from .ml.predictor import Predictor
 from .ml.trainer import Trainer
 from .ml.src.translit_convertor import ru_translit as translit
 from .ml.src.translit_convertor import special_characters as spec_ch
+
+from .ml.compare_models import compare_models as test_models
 
 import pandas as pd
 
@@ -166,12 +169,14 @@ def api_train_data_upload():
     if request.content_type not in ['text/csv',]:
         return abort(400, "Unexpected Content-Type, expecting: text/csv")
     else:
-        train_csv_name = 'upload-train-data.csv'
+        now = datetime.now()
+        dt_string = now.strftime("%d-%m-%Y-%H-%M-%S")
+        train_csv_name = dt_string + '-train-data.csv'
         f = open(os.path.join(app.config["MEDIA_FOLDER"], train_csv_name), "w", encoding="utf-8")
         f.write(upload_data)
         f.close()
 
-        return jsonify({"status": 'OK', "info": 'The new file for train ML model was uploaded'})
+        return jsonify({"status": 'OK', "info": 'The new file for train ML model was uploaded', "saved_filename": train_csv_name,})
 
 @app.route("/api/train-models", methods=['POST'])
 def api_train_models():
@@ -179,20 +184,17 @@ def api_train_models():
     nativeBayes and countVectorize model will be trained
     Waiting for:
     BODY
-    { "save_model_name": "new-model.pkl" }
+    { "save_model_name": "new-model.pkl", "data_file": "upload-train-data.csv"}
     Rerurn json like:
     { "status": 'OK', "nb_model_name": 'nb-new-model.pkl', "cv_model_name": 'cv-new-model.pkl' }
     """
     app.logger.info('Start train new ML models')
-
-    trainer = Trainer()
-    trainer.train_file_name = 'upload-train-data.csv'
-
     time_start_req = datetime.now()
 
     request_data = request.get_json()
     save_model_name = request_data['save_model_name']
 
+    trainer = Trainer(train_data_file_name=request_data['data_file'])
     trainer.prepeare_data(steammer=True, lemmatizer=True)
     trainer.make_models(model_name=save_model_name)
 
@@ -255,3 +257,29 @@ def api_spec_symb():
             "status": 'OK', 
             "res": res,
         })
+
+@app.route("/api/test-compare-models", methods=['POST'])
+def api_compare_models():
+    """
+    Waiting for:
+    BODY
+    { "old_model_cv": o-cv-1.pkl, "old_model_nb": o-nb-1.pkl, "new_model_cv": n-cv-2.pkl, "new_model_nb": n-nb-2.pkl}
+    Rerurn json like:
+    
+    """
+    request_data = request.get_json()
+    old_model_cv = request_data['old_model_cv']
+    old_model_nb = request_data['old_model_nb']
+    new_model_cv = request_data['new_model_cv']
+    new_model_nb = request_data['new_model_nb']
+
+    process = test_models.CompareModels()
+    process.load_models(old_model_cv, old_model_nb, new_model_cv, new_model_nb)
+    res, percentage = process.compeare()
+
+    del process
+    return jsonify({
+        "status": 'OK', 
+        "res": res,
+        "better_percentage": percentage,
+    })
