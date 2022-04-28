@@ -1,0 +1,4 @@
+FROM public.ecr.aws/f2g8j8i0/nginx:1.20.2
+
+RUN rm /etc/nginx/conf.d/default.conf
+COPY nginx.conf.prod /etc/nginx/conf.d/nginx.conf
