@@ -1,3 +1,4 @@
+from email.policy import default
 import os
 import json
 from datetime import datetime
@@ -16,6 +17,8 @@ from flask import (
     redirect,
     url_for
 )
+from flask_httpauth import HTTPTokenAuth
+
 from flask_sqlalchemy import SQLAlchemy
 from .ml.predictor import Predictor
 from .ml.trainer import Trainer
@@ -30,6 +33,17 @@ app = Flask(__name__)
 app.config.from_object("project.config.Config")
 
 db = SQLAlchemy(app)
+
+auth = HTTPTokenAuth(scheme='Bearer')
+
+@auth.verify_token
+def verify_token(token):
+    if token == os.getenv('API_KEY'):
+        return 1
+
+@auth.error_handler
+def auth_error(status):
+    return "Access Denied: wrong API_KEY (Bearer Token)", status
 
 predictor = Predictor()
 
@@ -49,52 +63,56 @@ def healthy():
     db.engine.execute('SELECT 1')
     return ''
 
-@app.route("/static/<path:filename>")
-def staticfiles(filename):
-    return send_from_directory(app.config["STATIC_FOLDER"], filename)
+## Next lines for Web UI.
+## No need to use now.   
 
-@app.route("/upload", methods=["GET", "POST"])
-def upload_file():
-    if request.method == "POST":
-        file = request.files["file"]
-        filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config["MEDIA_FOLDER"], filename))
-    return """
-    <!doctype html>
-    <title>upload new File</title>
-    <form action="" method=post enctype=multipart/form-data>
-      <p><input type=file name=file><input type=submit value="Upload CSV">
-    </form>
-    <small>(csv file with two columns: <b>commenttext</b> and <b>spam</b>)</small>
-    """
+# @app.route("/static/<path:filename>")
+# def staticfiles(filename):
+#     return send_from_directory(app.config["STATIC_FOLDER"], filename)
 
-@app.route("/web/spam-predict", methods=['GET', 'POST'])
-def predict():
-    predictor = Predictor()
+# @app.route("/upload", methods=["GET", "POST"])
+# def upload_file():
+#     if request.method == "POST":
+#         file = request.files["file"]
+#         filename = secure_filename(file.filename)
+#         file.save(os.path.join(app.config["MEDIA_FOLDER"], filename))
+#     return """
+#     <!doctype html>
+#     <title>upload new File</title>
+#     <form action="" method=post enctype=multipart/form-data>
+#       <p><input type=file name=file><input type=submit value="Upload CSV">
+#     </form>
+#     <small>(csv file with two columns: <b>commenttext</b> and <b>spam</b>)</small>
+#     """
 
-    if request.method == "POST":
-        test_message = []
-        test_message.append(request.form['text'])
+# @app.route("/web/spam-predict", methods=['GET', 'POST'])
+# def predict():
+#     predictor = Predictor()
 
-        predictor.prepare_data(test_message, steammer=True, lemmatizer=True)
-        predictor.spam_score_predict()
-        predictor.spam_class_predict()
+#     if request.method == "POST":
+#         test_message = []
+#         test_message.append(request.form['text'])
 
-        return predictor.get_html_result()
+#         predictor.prepare_data(test_message, steammer=True, lemmatizer=True)
+#         predictor.spam_score_predict()
+#         predictor.spam_class_predict()
 
-    return """
-    <!doctype html>
-    <title>Put your message for test</title>
-    <form action="" method=post enctype=multipart/form-data>
-      <p><input type=text name=text><input type=submit value=Check>
-    </form>
-    """
+#         return predictor.get_html_result()
+
+#     return """
+#     <!doctype html>
+#     <title>Put your message for test</title>
+#     <form action="" method=post enctype=multipart/form-data>
+#       <p><input type=text name=text><input type=submit value=Check>
+#     </form>
+#     """
 
 
 # ===========
 #API
 # ===========
 @app.route("/api/spam-predict", methods=['POST'])
+@auth.login_required
 def api_predict():
     """
     Waiting for:
@@ -132,6 +150,7 @@ def api_predict():
     return jsonify(res_dict)
 
 @app.route("/api/set-models", methods=['POST'])
+@auth.login_required
 def api_set_model():
     """
     Waiting for:
@@ -158,6 +177,7 @@ def api_set_model():
         return abort(400, "Model name not found")
 
 @app.route("/api/train-data-upload", methods=['POST'])
+@auth.login_required
 def api_train_data_upload():
     """
     (csv file with two columns: commenttext and spam)
@@ -179,6 +199,7 @@ def api_train_data_upload():
         return jsonify({"status": 'OK', "info": 'The new file for train ML model was uploaded', "saved_filename": train_csv_name,})
 
 @app.route("/api/train-models", methods=['POST'])
+@auth.login_required
 def api_train_models():
     """
     nativeBayes and countVectorize model will be trained
@@ -208,6 +229,7 @@ def api_train_models():
                 })
 
 @app.route("/api/translit-convertor", methods=['POST'])
+@auth.login_required
 def api_translit_convertor():
     """
     Waiting for:
@@ -237,6 +259,7 @@ def api_translit_convertor():
         })
 
 @app.route("/api/spec-symb", methods=['POST'])
+@auth.login_required
 def api_spec_symb():
     """
     Waiting for:
@@ -259,6 +282,7 @@ def api_spec_symb():
         })
 
 @app.route("/api/test-compare-models", methods=['POST'])
+@auth.login_required
 def api_compare_models():
     """
     Waiting for:

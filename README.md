@@ -25,6 +25,10 @@ You can also use `python venv` for development. All dependent python packages in
 
 For *Flask* config uses `services/web/project/config.py`.
 
+## Auth
+
+> You must add **Bearer Token**(API_KEY) to each reqest
+
 # App routes
 
 - **/healthy** (check app)
